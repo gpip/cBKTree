@@ -4,6 +4,15 @@ Install
 pip install cbktree
 
 
+Changelog
+=========
+
+* 0.2.0: updated from https://github.com/fake-name/IntraArchiveDeduplicator/commit/7ef8329cc9714116cf70c5fca09d7fa334506d4d
+    * fixed https://github.com/fake-name/IntraArchiveDeduplicator/issues/2
+    * added `cbktree.__version__`
+* 0.1.0: initial version
+
+
 Original source
 ===============
 

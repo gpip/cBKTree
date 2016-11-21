@@ -2,10 +2,18 @@ from setuptools import setup, Extension
 
 from Cython.Build import cythonize
 
+version = None
+for line in open('./lib/version.py'):
+    if line.startswith('__version__'):
+        version = line.split('=')[1].strip()[1:-1]  # drop quotes.
+        break
+else:
+    raise Exception("Could not find package version")
+
 
 setup(
     name='cbktree',
-    version='0.1',
+    version=version,
     description='bktree data structure',
     packages=['cbktree'],
     package_dir={"cbktree": "lib"},
