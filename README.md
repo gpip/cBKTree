@@ -50,14 +50,13 @@ for node_id, ib in descriptor.items():
     print("{}: {}".format(node_id, res))
 
 # Find near matches for items that were not inserted.
-
+dupes = lambda x: tree.getWithinDistance(int_bits(x), SEARCH_DIST)
 new = '1101011110100100001011001101001110010011100010011101001000110101'
-print("new: {}".format(tree.getWithinDistance(int_bits(new), SEARCH_DIST)))
+assert dupes(new) == set([3])
 
 ones = '1' * 64
-print("111..: {}".format(tree.getWithinDistance(int_bits(ones), SEARCH_DIST)))
+assert dupes(ones) == set()
 
-# XXX Should return empty, returns [0] instead.
 zeroes = '0' * 64
-print("000..: {}".format(tree.getWithinDistance(int_bits(zeroes), SEARCH_DIST)))
+assert dupes(zeroes) == set()
 ```
