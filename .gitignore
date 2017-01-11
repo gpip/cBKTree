@@ -1,5 +1,7 @@
 *.pyc
 *.egg-info
+.cache/
+.eggs/
 cyHamDb.cpp
 build/
 dist/
