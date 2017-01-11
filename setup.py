@@ -19,7 +19,7 @@ setup(
     package_dir={"cbktree": "lib"},
     maintainer="Guilherme Polo",
     url="https://github.com/gpip/cBKTree",
-    ext_modules=cythonize(Extension(
+    ext_modules=cythonize([Extension(
         "cbktree/cyHamDb",
         sources=["lib/cyHamDb.pyx"],
         libraries=["stdc++"],
@@ -27,7 +27,7 @@ setup(
         language="c++",
         extra_compile_args=["-std=c++11", "-march=native", "-mtune=native", "-O3", "-mpopcnt"],
         extra_link_args=["-std=c++11", "-march=native", "-mtune=native", "-O3", "-mpopcnt"]
-    )),
+    )]),
     install_requires=['Cython'],
     setup_requires=['pytest-runner'],
     tests_require=['pytest'],
