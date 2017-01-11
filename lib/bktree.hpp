@@ -1,5 +1,5 @@
-
 #include <iostream>
+#include <atomic>
 
 #include <unordered_map>
 #include <memory>
@@ -64,6 +64,8 @@ namespace BK_Tree_Ns
 	class BK_Tree_Node
 	{
 		private:
+
+			const int tree_aryness;
 
 			/**
 			 * Bitmapped hash value for the node.
@@ -264,6 +266,7 @@ namespace BK_Tree_Ns
 			 * @param node_data data associated with hash.
 			 */
 			BK_Tree_Node(hash_type nodeHash, int64_t node_data)
+				: tree_aryness(65)
 			{
 				// std::cout << "Instantiating BK_Tree_Node instance - Hash: " << nodeHash << " node_data: " << node_data << std::endl;
 				this->node_data_items.insert(node_data);
@@ -274,8 +277,24 @@ namespace BK_Tree_Ns
 				// node's data.
 				// We use a 65-ary tree just so the math is easier, leaking 8 bytes per node is kind of
 				// irrelevant (I hope).
-				this->children.assign(65, NULL);
+				this->children.assign(this->tree_aryness, NULL);
 
+			}
+
+			int clear_node(void)
+			{
+				int cleared = 1;
+				for (int x = 0; x < this->tree_aryness; x += 1)
+				{
+					if (this->children[x] != NULL)
+					{
+						// std::cout << "Deleting node " << (uint64_t) val << std::endl;
+						cleared += this->children[x]->clear_node();
+						delete this->children[x];
+						this->children[x] = NULL;
+					}
+				}
+				return cleared;
 			}
 
 			/**
@@ -284,11 +303,7 @@ namespace BK_Tree_Ns
 			 */
 			~BK_Tree_Node()
 			{
-				for (auto val: this->children)
-				{
-					if (val != NULL)
-						delete val;
-				}
+				this->clear_node();
 			}
 
 			/**
@@ -446,6 +461,9 @@ namespace BK_Tree_Ns
 			pthread_rwlock_t lock_rw;
 
 
+			// We track attempts to acquire the locks so we can detect accidental recursions.
+			std::atomic<int>                                           recursed;
+
 		public:
 
 			/**
@@ -465,13 +483,29 @@ namespace BK_Tree_Ns
 					std::cerr << "Error initializing pthread rwlock!" << std::endl;
 				}
 				assert(ret == 0);
+
+				this->recursed = 0;
 			}
 
 			~BK_Tree()
 			{
+				this->clear_tree();
+			}
+
+			int clear_tree(void)
+			{
+				int cleared = 0;
 				// std::cout << "Destroying BK_Tree instance" << std::endl;
 				if (this->tree != NULL)
+				{
+					cleared += this->tree->clear_node();
 					delete this->tree;
+
+					// Now I'm just being silly.
+					this->tree = NULL;
+				}
+				return cleared;
+
 			}
 
 			/**
@@ -535,6 +569,7 @@ namespace BK_Tree_Ns
 				if (this->tree == NULL)
 				{
 					std::vector<int64_t> ret = {0, 0};
+					this->free_read_lock();
 					return ret;
 				}
 				auto rm_status = this->tree->remove(nodeHash, nodeData);
@@ -571,12 +606,15 @@ namespace BK_Tree_Ns
 				if (this->tree == NULL)
 				{
 					search_ret ret = {{}, 0};
+					this->free_read_lock();
 					return ret;
 				}
-
-				auto ret = this->tree->search(baseHash, distance);
-				this->free_read_lock();
-				return ret;
+				else
+				{
+					auto ret = this->tree->search(baseHash, distance);
+					this->free_read_lock();
+					return ret;
+				}
 			}
 
 			/**
@@ -589,7 +627,12 @@ namespace BK_Tree_Ns
 			{
 				return_deque ret;
 				this->get_read_lock();
-				this->tree->get_contains(ret);
+
+				if (this->tree != NULL)
+				{
+					this->tree->get_contains(ret);
+				}
+
 				this->free_read_lock();
 				return ret;
 			}
@@ -602,19 +645,29 @@ namespace BK_Tree_Ns
 
 			void get_read_lock(void)
 			{
+				// std::cout << "Read-lock acquisition!" << std::endl;
 				pthread_rwlock_rdlock(&(this->lock_rw));
 			}
 			void get_write_lock(void)
 			{
 				pthread_rwlock_wrlock(&(this->lock_rw));
+				// std::cout << "Write-lock acquisition -> " << this->recursed << "." << std::endl;
+				if (this->recursed > 0)
+				{
+					throw std::runtime_error("Reentrant lock acquisition!");
+				}
+				this->recursed += 1;
 			}
 
 			void free_read_lock(void)
 			{
+				// std::cout << "Read-lock free!" << std::endl;
 				pthread_rwlock_unlock(&(this->lock_rw));
 			}
 			void free_write_lock(void)
 			{
+				this->recursed -= 1;
+				// std::cout << "Write-lock free -> " << this->recursed << "." << std::endl;
 				pthread_rwlock_unlock(&(this->lock_rw));
 			}
 

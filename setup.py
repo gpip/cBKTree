@@ -30,5 +30,5 @@ setup(
     )),
     install_requires=['Cython'],
     setup_requires=['pytest-runner'],
-    tests_require=['pytest', 'bitstring'],
+    tests_require=['pytest'],
 )

@@ -13,6 +13,8 @@ from libcpp.vector cimport vector
 from libcpp.set cimport set as cset
 from contextlib import contextmanager
 
+import gc
+
 cdef extern from "./bktree.hpp" namespace "BK_Tree_Ns":
 	# ctypedef cset[int64_t] set_64
 	ctypedef cpair[cset[int64_t], int64_t] search_ret
@@ -32,6 +34,7 @@ cdef extern from "./bktree.hpp" namespace "BK_Tree_Ns":
 		void            get_write_lock() nogil
 		void            free_read_lock() nogil
 		void            free_write_lock() nogil
+		int             clear_tree() nogil
 		return_deque    get_all() nogil
 
 
@@ -121,33 +124,14 @@ cdef class CPP_BkHammingTree(object):
 				extracted.append((ret[x].first, ret[x].second))
 		return extracted
 
+	cpdef clear_tree(self):
+		ret = self.treeroot_p.clear_tree()
+		print("Tree cleared!")
+		return ret
+
+
 	def __dealloc__(self):
 		del self.treeroot_p
-
-
-
-
-
-class CPPLockProxy(object):
-	def __init__(self, treehandle):
-		self.tree = treehandle
-
-	@contextmanager
-	def reader_context(self):
-		self.tree.get_read_lock()
-		try:
-			yield
-		finally:
-			self.tree.free_read_lock()
-
-	@contextmanager
-	def writer_context(self):
-		self.tree.get_write_lock()
-		try:
-			yield
-		finally:
-			self.tree.free_write_lock()
-
 
 
 class CPPBkHammingTree(object):
@@ -156,7 +140,7 @@ class CPPBkHammingTree(object):
 		cur             = threading.current_thread().name
 		self.log        = logging.getLogger("Main.Tree."+cur)
 		self.root       = CPP_BkHammingTree()
-		self.updateLock = CPPLockProxy(self.root)
+		# self.updateLock = CPPLockProxy(self.root)
 		self.nodes = 0
 
 
@@ -219,23 +203,43 @@ class CPPBkHammingTree(object):
 	# Explicitly dump all the tree items.
 	# Note: Only ever called from within a lock-synchronized context.
 	def dropTree(self):
-		self.root       = CPP_BkHammingTree()
-		self.updateLock = CPPLockProxy(self.root)
+
+		cleared = self.root.clear_tree()
 		self.nodes  = 0
+
+		self.log.info("Tree-Drop deleted %s items", cleared)
+		collected = gc.collect()
+		self.log.info("GC collected %s items.", collected)
 
 		assert self.root is not None
 
+	@contextmanager
+	def reader_context(self):
+		self.root.get_read_lock()
+		try:
+			yield
+		finally:
+			self.root.free_read_lock()
+
+	@contextmanager
+	def writer_context(self):
+		self.root.get_write_lock()
+		try:
+			yield
+		finally:
+			self.root.free_write_lock()
+
 
 	def __iter__(self):
-		for value in self.root.get_all():
-			yield value
+		with self.reader_context():
+			for value in self.root.get_all():
+				yield value
 
 	def __setattr__(self, name, value):
 		if name == "root":
 			assert value != None, "Attempting to set key '{}' to value '{}'".format(name, value)
 
 		object.__setattr__(self, name, value)
-
 
 
 # Expose the casting behaviour because I need to be
@@ -256,6 +260,7 @@ def explicitUnsignCast(inVal):
 def explicitSignCast(inVal):
 	return cExplicitSignCast(inVal)
 
+
 # Expose the hamming distance calculation
 # so I can test it with the unit tests.
 def hamming_dist(a, b):
@@ -267,6 +272,5 @@ def f_hamming_dist(a, b):
 
 import threading
 import logging
-
 
 BkHammingTree = CPPBkHammingTree
